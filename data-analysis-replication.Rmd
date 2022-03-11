@@ -4,6 +4,23 @@ author: "Sam Smith"
 date: "3/2/2022"
 output: html_document
 ---
+For this reproducibility project, I will be attempting to replicate the analyses of the following paper:
+
+Kistner, T. M., Zink, K. D., Worthington, S., & Lieberman, D. E. (2021). Geometric morphometric investigation of craniofacial morphological change in domesticated silver foxes. Scientific reports, 11(1), 1-10.
+
+There is an ongoing, long-term, artificial selection study in Russia where researchers have tried to domesticate silver foxes. After only 8-10 generations, they found behavioral changes, and after a few more generations, morphological changes, including craniofacial differences. From this and one other study, researchers have proposed a link between craniofacial changes and domestication. However, Kistner et al. (2021) noted potential issues with this hypothesis including the assumption that the unselected foxes from the original experiment had "wild-type" craniofacial shapes. The authors pointed out that these foxes may have experienced selective pressures from having been farmed for 60+ years. Thus, the goal of their study was to understand the effect of domestication on craniofacial skeletal morphology in silver foxes and specifically identify the magnitude of differences in craniofacial morphology between each of selected, unselected, and wild foxes. They predicted that the differences will be greater between wild and farmed foxes than between unselected and selected groups. They collected 3D landmark data, linear, and endocranial volume measurements on skulls from selected, unselected, and wild foxes. The authors used geometric morphometric analyses on the 3D data to create tangent space coordinates. The used procrustes ANOVA on these coordinates to generate average population differences. Finally, they used a generalized least squares model to analyze the linear and endocranial volume data. They found that the two farmed fox populations were much more similar than either group was to that of wild foxes, suggested that unselected fox cranial morphology is not an appropriate proxy for that of wild foxes. They further propose that craniofacial morphology is not a reliable predictor of docility in these foxes.
+
+I will be replicating ... 
+
+The data files have the following naming conventions:
+
+3D landmark coordinates for each specimen : Fox_data_Morphologika.txt
+
+linear measurements for all specimens : Fox_linear_volume_data.csv
+
+Replication data measurements : DF_morphologika.txt, DF476_morphologika.txt, DM_morphologika.txt, DM23_morphologika.txt, UF_morphologika.txt, UF1058_morphologika.txt
+
+linear CV data is what??
 
 ```{r}
 ```
