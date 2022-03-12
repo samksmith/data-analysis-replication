@@ -18,16 +18,96 @@ The data files have the following naming conventions:
 
 linear measurements for all specimens : Fox_linear_volume_data.csv
 
-Replication data measurements : DF_morphologika.txt, DF476_morphologika.txt, DM_morphologika.txt, DM23_morphologika.txt, UF_morphologika.txt, UF1058_morphologika.txt
+Replication data measurements for 3D landmark coordinates: DF_morphologika.txt, DF476_morphologika.txt, DM_morphologika.txt, DM23_morphologika.txt, UF_morphologika.txt, UF1058_morphologika.txt
 
-linear CV data is what??
+Replication data measurements for linear measurements: linear_cv_data.csv
+
+First, I will load in the datasets and do exploratory analyses.
+
+Let's start with the linear measurements for all the specimens. Below, I load in the data as a tibble and show a few lines of raw code.
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(cowplot)
+f <- "https://raw.githubusercontent.com/samksmith/data-analysis-replication/main/data/fox_linear_volume_data.csv"
+linear_data <- read_csv(f,col_names = TRUE)
+head(linear_data) # what does the raw data look like?
+```
+
+There are 9 measurements taken for each skull. We can start by doing some descriptive statistics to get a sense of the central tendency and spread of these linear measurements.
+
+First, let's look at the mean and standard deviations of all the measurements and visualize the central tendency and spread of these linear measurements for each population and sex using boxplots.
+```{r}
+summary(linear_data[,-c(1:3)]) # show me summary stats for all the skull measurements
+
+p1 <- ggplot(linear_data,aes(x=population,y=zygomatic_width,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Zygomatic width") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p2 <- ggplot(linear_data,aes(x=population,y=cranial_vault_width,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Cranial vault width") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p3 <- ggplot(linear_data,aes(x=population,y=upper_jaw_width,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Upper jaw width") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p4 <- ggplot(linear_data,aes(x=population,y=total_skull_length,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Total skull length") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p5 <- ggplot(linear_data,aes(x=population,y=snout_length,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Snout length") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p6 <- ggplot(linear_data,aes(x=population,y=cranial_vault_height,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Cranial vault height") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p7 <- ggplot(linear_data,aes(x=population,y=endocranial_volume,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Endocranial volume") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p8 <- ggplot(linear_data,aes(x=population,y=face_geometric_mean,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Face geometric mean") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p9 <- ggplot(linear_data,aes(x=population,y=centroid_size,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Centroid size") + geom_point(position=position_jitterdodge(),alpha=0.3)
+
+plot_grid(p1,p2,p3,p4,p5,p6,p7,p8,p9)
+
+```
+Looks like there are sex differences and possible group differences most strongly between the wild population and the other two pops, which seem pretty similar by eye. 
+
+Let's also look to see if there are relationships between these measurements or whether these measurements are independent of each other. It is important to look at this because it will inform the linear modeling later on. 
+```{r}
+library(corrplot)
+cor = cor(linear_data[4:10], use="pairwise.complete.obs")
+corrplot.mixed(cor, lower.col = "black",tl.pos='d',number.cex = .7,upper="ellipse")
+detach(package:corrplot)
+```
+All of these variables are correlated, which is unsurprising since they represent difference, non-independent aspect of shape variation measured on the same specimens. This plot looks very similar to what is present in the supplemental figures of the paper: 
+
+Before doing modeling these data, the authors size-adjusted the linear and volume measurements because there is an overall difference in isometric size between wild and farmed populations. This was important to do because the authors are interested in effect of docility selection on craniofacial size separate from overall size selection, which is expected to also have an impact on craniofacial size.
+
+Here I will attempt to normalize the 6 linear measurements and cube root of endocranial volume by centroid size (a proxy for overall cranial size). Below, I create a dataframe with the normalized measurements and I slook at the correlation between variables.
+```{r}
+
+normal_linear <- tibble("id"=linear_data$id,
+                        "population"=linear_data$population,
+                        "sex"=linear_data$sex,
+                        "zygomatic_width_norm" = linear_data$zygomatic_width / linear_data$centroid_size,
+                        "cranial_vault_width_norm" = linear_data$cranial_vault_width / linear_data$centroid_size,
+                        "upper_jaw_width_norm" = linear_data$upper_jaw_width / linear_data$centroid_size,
+                        "total_skull_length_norm" = linear_data$total_skull_length / linear_data$centroid_size,
+                        "snout_length_norm" = linear_data$snout_length / linear_data$centroid_size,
+                        "cranial_vault_height_norm" = linear_data$cranial_vault_height / linear_data$centroid_size,
+                        "cube_endocranial_volume_norm" = (linear_data$endocranial_volume)^(1/3) / linear_data$centroid_size)
+head(normal_linear)
+summary(normal_linear[,-c(1:3)]) 
+
+p1 <- ggplot(normal_linear,aes(x=population,y=zygomatic_width_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized zygomatic width") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p2 <- ggplot(normal_linear,aes(x=population,y=cranial_vault_width_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized cranial vault width") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p3 <- ggplot(normal_linear,aes(x=population,y=upper_jaw_width_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized upper jaw width") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p4 <- ggplot(normal_linear,aes(x=population,y=total_skull_length_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized total skull length") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p5 <- ggplot(normal_linear,aes(x=population,y=snout_length_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized snout length") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p6 <- ggplot(normal_linear,aes(x=population,y=cranial_vault_height_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized cranial vault height") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p7 <- ggplot(normal_linear,aes(x=population,y=cube_endocranial_volume_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized, cubed endocranial volume") + geom_point(position=position_jitterdodge(),alpha=0.3)
+
+plot_grid(p1,p2,p3,p4,p5,p6,p7)
+
+library(corrplot)
+cor = cor(normal_linear[4:10], use="pairwise.complete.obs")
+corrplot.mixed(cor, lower.col = "black",tl.pos='d',number.cex = .7,upper="ellipse")
+detach(package:corrplot)
+```
+
+My correlation plot looks a lot like the one in the supplementals. INSERT HERE.
+
+
+The authors then used the normalized data to find whether there were population differences. They used a linear model with a generalized least squares (GLS) estimator from nlme package. They regressed all 7 skull variables simultaneously as correlated responses on population identity and sex. They provide more information in the supplementary methods (Figs S3, S4). 
+
+Because the 7 variable are correlated, it is not appropriate to do separate GLMs for each variable on population identity and sex. The GLS estimator allows correlations between the variables to be accounted for within the model.
+
 
 ```{r}
 ```
 
-
-```{r}
-```
-
-```{r}
-```
+We report estimates of pairwise percent differences between population means for each skull variable. We use this method because the 7 linear and volumetric skull variables were correlated in two ways (see Fig. S3). First, they were measured on the same specimens, and second, they represent non-independent aspects of shape variation. Modeling these response variables in 7 separate general linear models (e.g., ANOVA) would result in biologically unrealistic inferences because these correlations would be artificially fixed at zero. In addition, since skull variables exhibited varying amounts of dispersion, the GLS model allowed for different residual variances for each response variable.
