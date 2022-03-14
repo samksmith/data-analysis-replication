@@ -22,6 +22,47 @@ Replication data measurements for 3D landmark coordinates: DF_morphologika.txt, 
 
 Replication data measurements for linear measurements: linear_cv_data.csv
 
+Read in 3D landmark coordinate data and look at it. We use the geomorph package because it is in a special file type (Morphologika).
+
+```{r}
+library(geomorph)
+f <- "https://raw.githubusercontent.com/samksmith/data-analysis-replication/main/data/Fox_data_Morphologika.txt"
+landmark <- read.morphologika(f)
+str(landmark)
+landmark$coords[,,1]
+
+(n <- length(landmark$labels[,1])) # number of individuals we have 3D landmark data for
+(p <- nrow(landmark$coords[,,1])) # number of measured coordinates
+(k <- ncol(landmark$coords[,,1])) # number of dimensions to the coordinates
+```
+This returns a list of 3. The first object in the list has the 3 dimensional coordinates for each sample. The second object has the labels for each sample (id, sex, and group). The final object contains the wireframe values.
+
+Next we need to do a generalized Procrustes analysis. This involves translating landmarks to the origin, rescaling to centroid size, and rotating landmarks using a least squares criterion. this places homologous coordinates in close alignment (in same shape space, centered on the mean shape). From reading the geomorph package manual, this is all done using a single function gpagen.The authors helpfully mention in the methods that they use default parameters of the gpagen function.
+
+```{r}
+Pro_sup <- gpagen(landmark$coords)
+names(Pro_sup)
+str(Pro_sup)
+```
+
+Next, I need to project these coordinates onto a "linear tangent space." Looks like this is plotting coordinates on principal component axes. From some googling, it looks like there was a function direclty for this in early versions of the geomorph package, but it is now depreciated (from v. 3.3.0 on) and they suggest gm.prcomp instead. This function defaults to using an OLS for centering, which I think the authors used (instead of GLS), but I am not 100% sure because they aren't specific. I also print out a summary and plot the amount of variance explained by each PC.
+
+```{r}
+tang_space_coords <- gm.prcomp(Pro_sup$coords)
+names(tang_space_coords)
+summary(tang_space_coords)
+
+# amount of variance explained by different 
+pvar <- (tang_space_coords$sdev^2)/(sum(tang_space_coords$sdev^2)) 
+names(pvar) <- seq(1:length(pvar))
+barplot(pvar, xlab= "Principal Components", ylab = "% Variance")
+```
+
+Now, I need to do a permutation-based Procrustes MANOVA. I will regress tangent space coordinates on population identity and sex using the geomorph package. 
+Quote below: where to start next time --- 
+"To test hypotheses about shape differences among the three populations of foxes, we used a permutation-based Procrustes MANOVA to regress tangent space coordinates on population identity and sex in the geomorph v. 3.3.1 package. Because we are unable to detect significant differences in allometry among populations with a permutation-based Procrustes MANOVA of tangent space coordinates on the inter- action term of population identity and centroid size, the tangent space coordinates were not corrected for any scaling effects (see Supplemental information and Fig S2). Given this result, we control only for isometric size in geometric morphometric analyses (i.e. no correction for scaling in tangent space coordinates) as well as in our linear measurements."
+
+
 First, I will load in the datasets and do exploratory analyses.
 
 Let's start with the linear measurements for all the specimens. Below, I load in the data as a tibble and show a few lines of raw code.
@@ -63,7 +104,7 @@ cor = cor(linear_data[4:10], use="pairwise.complete.obs")
 corrplot.mixed(cor, lower.col = "black",tl.pos='d',number.cex = .7,upper="ellipse")
 detach(package:corrplot)
 ```
-All of these variables are correlated, which is unsurprising since they represent difference, non-independent aspect of shape variation measured on the same specimens. This plot looks very similar to what is present in the supplemental figures of the paper: 
+All of these variables are correlated, which is unsurprising since they represent difference, non-independent aspect of shape variation measured on the same specimens. This plot looks very similar to what is present in the supplemental figures of the paper.
 
 Before doing modeling these data, the authors size-adjusted the linear and volume measurements because there is an overall difference in isometric size between wild and farmed populations. This was important to do because the authors are interested in effect of docility selection on craniofacial size separate from overall size selection, which is expected to also have an impact on craniofacial size.
 
