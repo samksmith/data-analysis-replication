@@ -8,7 +8,7 @@ For this reproducibility project, I will be attempting to replicate the analyses
 
 Kistner, T. M., Zink, K. D., Worthington, S., & Lieberman, D. E. (2021). Geometric morphometric investigation of craniofacial morphological change in domesticated silver foxes. Scientific reports, 11(1), 1-10.
 
-There is an ongoing, long-term, artificial selection study in Russia where researchers have tried to domesticate silver foxes. After only 8-10 generations, they found behavioral changes, and after a few more generations, morphological changes, including craniofacial differences. From this and one other study, researchers have proposed a link between craniofacial changes and domestication. However, Kistner et al. (2021) noted potential issues with this hypothesis including the assumption that the unselected foxes from the original experiment had "wild-type" craniofacial shapes. The authors pointed out that these foxes may have experienced selective pressures from having been farmed for 60+ years. Thus, the goal of their study was to understand the effect of domestication on craniofacial skeletal morphology in silver foxes and specifically identify the magnitude of differences in craniofacial morphology between each of selected, unselected, and wild foxes. They predicted that the differences will be greater between wild and farmed foxes than between unselected and selected groups. They collected 3D landmark data, linear, and endocranial volume measurements on skulls from selected, unselected, and wild foxes. The authors used geometric morphometric analyses on the 3D data to create tangent space coordinates. The used procrustes ANOVA on these coordinates to generate average population differences. Finally, they used a generalized least squares model to analyze the linear and endocranial volume data. They found that the two farmed fox populations were much more similar than either group was to that of wild foxes, suggested that unselected fox cranial morphology is not an appropriate proxy for that of wild foxes. They further propose that craniofacial morphology is not a reliable predictor of docility in these foxes.
+There is an ongoing, long-term, artificial selection study in Russia where researchers have tried to domesticate silver foxes. After only 8-10 generations, they found behavioral differences, and after a few more generations, morphological changes, including differences in craniofacial structures. From this and one other study, researchers have proposed a link between craniofacial changes and domestication. However, Kistner et al. (2021) noted potential issues with this hypothesis including the assumption that the unselected foxes from the original experiment had "wild-type" craniofacial shapes. The authors pointed out that these foxes may have experienced selective pressures from having been farmed for 60+ years. Thus, the goal of their study was to understand the effect of domestication on craniofacial skeletal morphology in silver foxes and specifically identify the magnitude of differences in craniofacial morphology between each of selected, unselected, and wild foxes. They predicted that the differences will be greater between wild and farmed foxes than between unselected and selected groups. They collected 3D landmark data, linear, and endocranial volume measurements on skulls from selected, unselected, and wild foxes. The authors used geometric morphometric analyses on the 3D data to create tangent space coordinates. They then used procrustes ANOVA on these coordinates to find average population differences. Finally, they used a generalized least squares model to analyze the linear and endocranial volume data. They found that the two farmed fox populations were much more similar than either group was to wild foxes, suggesting that unselected fox cranial morphology is not an appropriate proxy for that of wild foxes. They further propose that craniofacial morphology is not a reliable predictor of docility in these foxes.
 
 I will be replicating ... 
 
@@ -22,7 +22,7 @@ Replication data measurements for 3D landmark coordinates: DF_morphologika.txt, 
 
 Replication data measurements for linear measurements: linear_cv_data.csv
 
-Read in 3D landmark coordinate data and look at it. We use the geomorph package because it is in a special file type (Morphologika).
+Read in 3D landmark coordinate data and look at it. We use the geomorph package because it is a special file type (Morphologika). This was something that I had to google before I understood the file structure. This is presumably familiar to people knowledgeable in this field and wa probably why it was not included in the manuscript.
 
 ```{r}
 library(geomorph)
@@ -35,9 +35,10 @@ landmark$coords[,,1]
 (p <- nrow(landmark$coords[,,1])) # number of measured coordinates
 (k <- ncol(landmark$coords[,,1])) # number of dimensions to the coordinates
 ```
+
 This returns a list of 3. The first object in the list has the 3 dimensional coordinates for each sample. The second object has the labels for each sample (id, sex, and group). The final object contains the wireframe values.
 
-Next we need to do a generalized Procrustes analysis. This involves translating landmarks to the origin, rescaling to centroid size, and rotating landmarks using a least squares criterion. this places homologous coordinates in close alignment (in same shape space, centered on the mean shape). From reading the geomorph package manual, this is all done using a single function gpagen.The authors helpfully mention in the methods that they use default parameters of the gpagen function.
+Next we need to do a generalized Procrustes analysis. This involves translating landmarks to the origin, rescaling to centroid size, and rotating landmarks using a least squares criterion. this places homologous coordinates in close alignment (in same shape space, centered on the mean shape). From reading the geomorph package manual, this is all done using a single function gpagen.The authors mention in the methods that they use default parameters of the gpagen function.
 
 ```{r}
 Pro_sup <- gpagen(landmark$coords)
@@ -45,7 +46,7 @@ names(Pro_sup)
 str(Pro_sup)
 ```
 
-Next, I need to project these coordinates onto a "linear tangent space." Looks like this is plotting coordinates on principal component axes. From some googling, it looks like there was a function direclty for this in early versions of the geomorph package, but it is now depreciated (from v. 3.3.0 on) and they suggest gm.prcomp instead. This function defaults to using an OLS for centering, which I think the authors used (instead of GLS), but I am not 100% sure because they aren't specific. I also print out a summary and plot the amount of variance explained by each PC.
+Next, I need to project these coordinates onto a "linear tangent space." Looks like this is plotting coordinates on principal component axes. From some googling, it looks like there was a function directly for this in early versions of the geomorph package, but it is now depreciated (from v. 3.3.0 on) and they suggest gm.prcomp instead. This function defaults to using an OLS for centering, which I think the authors used (instead of GLS), but I am not 100% sure because they aren't specific. I also print out a summary and plot the amount of variance explained by each PC.
 
 ```{r}
 tang_space_coords <- gm.prcomp(Pro_sup$coords)
