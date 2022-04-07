@@ -8,9 +8,7 @@ For this reproducibility project, I will be attempting to replicate the analyses
 
 Kistner, T. M., Zink, K. D., Worthington, S., & Lieberman, D. E. (2021). Geometric morphometric investigation of craniofacial morphological change in domesticated silver foxes. Scientific reports, 11(1), 1-10.
 
-There is an ongoing, long-term, artificial selection study in Russia where researchers have tried to domesticate silver foxes. After only 8-10 generations, they found behavioral differences, and after a few more generations, morphological changes, including differences in craniofacial structures. From this and one other study, researchers have proposed a link between craniofacial changes and domestication. However, Kistner et al. (2021) noted potential issues with this hypothesis including the assumption that the unselected foxes from the original experiment had "wild-type" craniofacial shapes. The authors pointed out that these foxes may have experienced selective pressures from having been farmed for 60+ years. Thus, the goal of their study was to understand the effect of domestication on craniofacial skeletal morphology in silver foxes and specifically identify the magnitude of differences in craniofacial morphology between each of selected, unselected, and wild foxes. They predicted that the differences will be greater between wild and farmed foxes than between unselected and selected groups. They collected 3D landmark data, linear, and endocranial volume measurements on skulls from selected, unselected, and wild foxes. The authors used geometric morphometric analyses on the 3D data to create tangent space coordinates. They then used procrustes ANOVA on these coordinates to find average population differences. Finally, they used a generalized least squares model to analyze the linear and endocranial volume data. They found that the two farmed fox populations were much more similar than either group was to wild foxes, suggesting that unselected fox cranial morphology is not an appropriate proxy for that of wild foxes. They further propose that craniofacial morphology is not a reliable predictor of docility in these foxes.
-
-I will be replicating ... 
+There is a long-term, artificial selection study in Russia where researchers have tried to domesticate silver foxes. After only 8-10 generations, they found behavioral differences, and after a few more generations, morphological changes, including differences in craniofacial structure. From this and one other study, researchers have proposed a link between craniofacial changes and domestication. However, Kistner et al. (2021) noted potential issues with this hypothesis including the assumption that the unselected foxes from the original experiment had "wild-type" craniofacial shapes. The authors pointed out that these foxes may have experienced selective pressures from having been farmed for 60+ years. Thus, the goal of their study was to understand the effect of domestication on craniofacial skeletal morphology in silver foxes and specifically identify the magnitude of differences in craniofacial morphology between selected, unselected, and wild foxes. They predicted that the differences will be greater between wild and farmed foxes than between unselected and selected groups. They collected 3D landmark data, linear, and endocranial volume measurements on skulls from selected, unselected, and wild foxes. The authors used geometric morphometric analyses on the 3D data to create tangent space coordinates. They then used procrustes ANOVA on these coordinates to find average population differences. Finally, they used a generalized least squares model to analyze the linear and endocranial volume data. In addition to these analyses, the authors also assessed the repeatability of the skull measurements. Overall, they found that the two farmed fox populations were much more similar than either group was to wild foxes, suggesting that unselected fox cranial morphology is not an appropriate proxy for that of wild foxes. They further propose that craniofacial morphology is not a reliable predictor of docility in these foxes.
 
 The data files have the following naming conventions:
 
@@ -22,7 +20,9 @@ Replication data measurements for 3D landmark coordinates: DF_morphologika.txt, 
 
 Replication data measurements for linear measurements: linear_cv_data.csv
 
-Read in 3D landmark coordinate data and look at it. We use the geomorph package because it is a special file type (Morphologika). This was something that I had to google before I understood the file structure. This is presumably familiar to people knowledgeable in this field and wa probably why it was not included in the manuscript.
+I will be replicating analysis of the 3D landmark and linear measurement data, but not the replication analyses.
+
+I will start with the 3D landmark data analysis. Here, I read in 3D landmark coordinate data and look at it. We use the geomorph package because it is a special file type (Morphologika). This was something that I had to google before I understood the file structure.
 
 ```{r}
 library(geomorph)
@@ -36,7 +36,7 @@ landmark$coords[,,1]
 (k <- ncol(landmark$coords[,,1])) # number of dimensions to the coordinates
 ```
 
-This returns a list of 3. The first object in the list has the 3 dimensional coordinates for each sample. The second object has the labels for each sample (id, sex, and group). The final object contains the wireframe values.
+The landmark dataframe returns a list of 3. The first object in the list has the 3 dimensional coordinates for each sample. The second object has the labels for each sample (id, sex, and group). The final object contains the wireframe values.
 
 Next we need to do a generalized Procrustes analysis. This involves translating landmarks to the origin, rescaling to centroid size, and rotating landmarks using a least squares criterion. this places homologous coordinates in close alignment (in same shape space, centered on the mean shape). From reading the geomorph package manual, this is all done using a single function gpagen.The authors mention in the methods that they use default parameters of the gpagen function.
 
@@ -46,23 +46,67 @@ names(Pro_sup)
 str(Pro_sup)
 ```
 
-Next, I need to project these coordinates onto a "linear tangent space." Looks like this is plotting coordinates on principal component axes. From some googling, it looks like there was a function directly for this in early versions of the geomorph package, but it is now depreciated (from v. 3.3.0 on) and they suggest gm.prcomp instead. This function defaults to using an OLS for centering, which I think the authors used (instead of GLS), but I am not 100% sure because they aren't specific. I also print out a summary and plot the amount of variance explained by each PC.
+The returned object (Pro_sup) is another list that contains a bunch of different objects. Some of these include an array of coordinates (coords), a vector of centroid sizes for each specimen (Csize), a variance-covariance matrix of Procrustes shape variables (points.VCV), and a Procrustes distance matrix (procD).
+
+Next, I need to project these coordinates onto a "linear tangent space." Looks like this is plotting coordinates on principal component axes. From some googling, it looks like there was a function directly for this in early versions of the geomorph package, but it is now depreciated (from v. 3.3.0 on) and they suggest gm.prcomp instead. This function defaults to using an OLS for centering, which I think the authors used (instead of GLS), but I am not 100% sure because they aren't specific in the manuscript. I also print out a summary and plot the amount of variance explained by each PC.
 
 ```{r}
 tang_space_coords <- gm.prcomp(Pro_sup$coords)
 names(tang_space_coords)
 summary(tang_space_coords)
 
-# amount of variance explained by different 
+# amount of variance explained by different principal components
 pvar <- (tang_space_coords$sdev^2)/(sum(tang_space_coords$sdev^2)) 
 names(pvar) <- seq(1:length(pvar))
 barplot(pvar, xlab= "Principal Components", ylab = "% Variance")
 ```
 
-Now, I need to do a permutation-based Procrustes MANOVA. I will regress tangent space coordinates on population identity and sex using the geomorph package. 
-Quote below: where to start next time --- 
-"To test hypotheses about shape differences among the three populations of foxes, we used a permutation-based Procrustes MANOVA to regress tangent space coordinates on population identity and sex in the geomorph v. 3.3.1 package. Because we are unable to detect significant differences in allometry among populations with a permutation-based Procrustes MANOVA of tangent space coordinates on the inter- action term of population identity and centroid size, the tangent space coordinates were not corrected for any scaling effects (see Supplemental information and Fig S2). Given this result, we control only for isometric size in geometric morphometric analyses (i.e. no correction for scaling in tangent space coordinates) as well as in our linear measurements."
+The tang_space_coords object contains the component scores for each sample (x), decomposed VCV matrix values (d), VCV matrix variable loadings (rotation), list of shape coordinants at extreme ends of PC axes (shapes), 
 
+Now, I am ready to test hypotheses about shape differences among the three fox populations. The authors used a permutation-based Procrustes MANOVA to regress tangent space coordinates, which I generated above, on population id and sex. They use the geomorph package to do this. They first decided whether they needed to correct for scaling effects, which I do not fully understand. To test this they looked for differences in allometry (i.e. characterstics changing with body size) among populations by using a permutation-based Procrustes MANOVA of tangent space coordinates on the interaction term of population id and centroid size. 
+
+Looks like I need to use geomorph::procD.lm, which runs the linear model. From looking at another geomorph function, I get definitions for common and unique allometry models (which show up in Fig S2, so they must have run both).
+
+common allometry: shape ~ size + groups
+unique allometry: shape ~ size * groups
+
+```{r}
+# there are a bunch of other options, but I don't know what to choose since the authors do not specify so I will just be going with defaults.
+comm_allom <- procD.lm(tang_space_coords$x ~ Pro_sup$Csize + landmark$labels[,2])
+unique_allom <- procD.lm(tang_space_coords$x ~ Pro_sup$Csize*landmark$labels[,2])
+
+comm_allom$aov.table
+unique_allom$aov.table
+```
+
+When you look at the anova table you can see that the interaction of centroid size and population ID is not significant, which matches what they find.
+
+
+To replicate figure S2, I have to use different criterion to display shape scores (PredLine - based on fitted values and RegScore - based on regression coefficients). These are plotted below and compared with the figure from the supplementals. 
+
+
+```{r}
+
+par(mfrow=c(2,2))
+plot(comm_allom$data$`Pro_sup$Csize`,comm_allom$fitted[,1],ylim=c(-0.03,0.03),xlab= "Centroid size",
+     ylab="Shape scores",col=as.factor(landmark$labels[,2]),pch=16,main="Common Allometry - Pred Line")
+plot(unique_allom$data$`Pro_sup$Csize`,unique_allom$fitted[,1],ylim=c(-0.03,0.03),xlab="Centroid size",
+     ylab="Shape scores",col=as.factor(landmark$labels[,2]),pch=16, main = "Unique Allometry - Pred Line")
+plotAllometry(comm_allom,comm_allom$data$`Pro_sup$Csize`,logsz=FALSE,method="RegScore",ylim=c(-0.03,0.03),
+              xlab= "Centroid size",ylab="Shape scores",col=as.factor(landmark$labels[,2]),
+              pch=16,main="Common Allometry - RegScore")
+plotAllometry(unique_allom,unique_allom$data$`Pro_sup$Csize`,logsz=FALSE,method="RegScore",ylim=c(-0.03,0.03),
+              xlab= "Centroid size",ylab="Shape scores",col=as.factor(landmark$labels[,2]),
+              pch=16,main="Unique Allometry - RegScore")
+
+```
+
+They look similar, which is good. 
+
+Okay, so now, I can run the permutation-based Procrustes MANOVA to regress tangent space coordinate on population identity and sex. Because of the above results they only control for isometric size. This will also be the case for the linear measurement MANOVA. 
+
+```{r}
+```
 
 First, I will load in the datasets and do exploratory analyses.
 
