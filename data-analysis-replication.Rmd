@@ -25,8 +25,9 @@ I will be replicating analysis of the 3D landmark and linear measurement data, b
 I will start with the 3D landmark data analysis. Here, I read in 3D landmark coordinate data and look at it. We use the geomorph package because it is a special file type (Morphologika). This was something that I had to google before I understood the file structure.
 
 ```{r}
+knitr::opts_chunk$set(fig.path = "images/")
 library(geomorph)
-f <- "https://raw.githubusercontent.com/samksmith/data-analysis-replication/main/data/Fox_data_Morphologika.txt"
+f <- "data/Fox_data_Morphologika.txt"
 landmark <- read.morphologika(f)
 str(landmark)
 landmark$coords[,,1]
@@ -51,6 +52,8 @@ The returned object (Pro_sup) is another list that contains a bunch of different
 Next, I need to project these coordinates onto a "linear tangent space." Looks like this is plotting coordinates on principal component axes. From some googling, it looks like there was a function directly for this in early versions of the geomorph package, but it is now depreciated (from v. 3.3.0 on) and they suggest gm.prcomp instead. This function defaults to using an OLS for centering, which I think the authors used (instead of GLS), but I am not 100% sure because they aren't specific in the manuscript. I also print out a summary and plot the amount of variance explained by each PC.
 
 ```{r}
+library(ggplot2)
+
 tang_space_coords <- gm.prcomp(Pro_sup$coords)
 names(tang_space_coords)
 summary(tang_space_coords)
@@ -61,7 +64,41 @@ names(pvar) <- seq(1:length(pvar))
 barplot(pvar, xlab= "Principal Components", ylab = "% Variance")
 ```
 
-The tang_space_coords object contains the component scores for each sample (x), decomposed VCV matrix values (d), VCV matrix variable loadings (rotation), list of shape coordinants at extreme ends of PC axes (shapes), 
+The tang_space_coords object contains the component scores for each sample (x), decomposed VCV matrix values (d), VCV matrix variable loadings (rotation), list of shape coordinates at extreme ends of PC axes (shapes), among other things. I plot the principal components to see how much variance each explains.
+
+```{r}
+PCA_dataframe <- as.data.frame(tang_space_coords$x)
+PCA_dataframe$ID <- rownames(tang_space_coords$x)
+PCA_dataframe$Pop <- landmark$labels[,2]
+PCA_dataframe$Sex <- landmark$labels[,1]
+
+# getting hull values for plotting the hulls on top of the dots in the pc plot
+grp.tame <- PCA_dataframe[PCA_dataframe$Pop == "Tame", ][chull(PCA_dataframe[PCA_dataframe$Pop == 
+    "Tame", c("Comp1", "Comp2")]), ]  # hull values
+grp.wild <- PCA_dataframe[PCA_dataframe$Pop == "Wild", ][chull(PCA_dataframe[PCA_dataframe$Pop == 
+    "Wild", c("Comp1", "Comp2")]), ]  # hull values
+grp.unselected <- PCA_dataframe[PCA_dataframe$Pop == "Unselected", ][chull(PCA_dataframe[PCA_dataframe$Pop == 
+    "Unselected", c("Comp1", "Comp2")]), ]  # hull values
+
+hull.data <- rbind(grp.tame, grp.wild, grp.unselected)
+
+ggplot() + 
+  geom_polygon(data=hull.data,aes(x=Comp1,y=Comp2,group=Pop),alpha=0.30) + # add the convex hulls
+  geom_point(data=PCA_dataframe,aes(x=Comp1,y=Comp2,shape=Sex,colour=Pop)) + # add the point markers
+  scale_colour_manual(values=c("Tame" = "green", "Wild" = "purple","Unselected" = "orange")) +
+  xlab("PC1 (31.9%)") + ylab("PC2 (8.2%)") + coord_equal() +
+  theme_bw() + 
+  theme(panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank())
+```
+ 
+```{r echo=FALSE, out.width="75%"}
+knitr::include_graphics("images/PCA.jpg")
+```
+
+ Above I plot the first two PCs to compare with the figure in the paper and they match! I did not attempt to plot the wireframes, but that could be done by accessing the "shape" object within the tangent space coordinates list.
 
 Now, I am ready to test hypotheses about shape differences among the three fox populations. The authors used a permutation-based Procrustes MANOVA to regress tangent space coordinates, which I generated above, on population id and sex. They use the geomorph package to do this. They first decided whether they needed to correct for scaling effects, which I do not fully understand. To test this they looked for differences in allometry (i.e. characterstics changing with body size) among populations by using a permutation-based Procrustes MANOVA of tangent space coordinates on the interaction term of population id and centroid size. 
 
@@ -83,8 +120,6 @@ When you look at the anova table you can see that the interaction of centroid si
 
 
 To replicate figure S2, I have to use different criterion to display shape scores (PredLine - based on fitted values and RegScore - based on regression coefficients). These are plotted below and compared with the figure from the supplementals. 
-
-
 ```{r}
 
 par(mfrow=c(2,2))
@@ -101,9 +136,13 @@ plotAllometry(unique_allom,unique_allom$data$`Pro_sup$Csize`,logsz=FALSE,method=
 
 ```
 
+```{r echo=FALSE, out.width="100%"}
+knitr::include_graphics("images/allometry.jpg")
+```
+
 They look similar, which is good. 
 
-Okay, so now, I can run the permutation-based Procrustes MANOVA to regress tangent space coordinate on population identity and sex. Because of the above results they only control for isometric size. This will also be the case for the linear measurement MANOVA. 
+Okay, so now, I can run the permutation-based Procrustes MANOVA to regress tangent space coordinate on population identity and sex. Because of the above results they only control for isometric size (aka do nothing). This will also be the case for the linear measurement MANOVA. 
 
 ```{r}
 proc_man_3d_data <- procD.lm(tang_space_coords$x ~ landmark$labels[,1] + landmark$labels[,2],iter=10000,SS.type="II")
@@ -111,35 +150,47 @@ proc_man_3d_data$aov.table
 p.adjust(proc_man_3d_data$aov.table$`Pr(>F)`,method="bonferroni")
 ```
 
-My anova table looks very similar to the one that they report except that my standard deviation of the F statistic is different. I am not sure why. I have had to basically play around with the inputs for the linear model call to make the values match up as much as possible. I am not 100% sure if this is because I don't understand something explained in the paper (such as what inputs should be included in this line of code if you are using GLS rather than OLS) or if they were just not specific enough for me to know right off the bat what I was supposed to do. At a minimum, I get the same p values and regression coefficients so I guess that is good.
-
-That result tells us that population id and sex are predictors of craniofacial shape, but we want to know exactly how. So now I must do pairwise comparisons of shape using Procrustes distances. The authors used the RRPP v. 0.6.1 package for this.
-
-```{r}
+```{r echo=FALSE, out.width="75%"}
+knitr::include_graphics("images/3d_manova.jpg")
 ```
 
-Thgey also did pairwise comparisons within groups by looking at the dispersion of residuals around the mean shape for each population and using that to group shape variance. 
+My anova table looks very similar to the one that they report except that the standard deviation of the F statistic is different. I am not sure why. I have had to basically play around with the inputs for the linear model call to make the values match up as much as possible. I am not 100% sure if this is because I don't understand something explained in the paper (such as what inputs should be included in this line of code if you are using GLS rather than OLS) or if they were just not specific enough for me to know right off the bat what I was supposed to do. At a minimum, I get the same regression coefficients so I guess that is good.
+
+That result tells us that population id and sex are predictors of craniofacial shape, but we want to know exactly how. So now I must do pairwise comparisons of shape using Procrustes distances. The authors used the RRPP v. 0.6.1 package for this. I also correct the p value using Bonferroni correction as stated in the methods.
 
 ```{r}
+pairwise_groups <- pairwise(proc_man_3d_data,groups=landmark$labels[,2])
+table <- summary.pairwise(pairwise_groups)
+adjusted_p <- p.adjust(table$summary.table$`Pr > d`,method="bonferroni")
+pairwise_groups_plotting <- as.data.frame(cbind("Contrasts" = c("D:U","D:W","U:W"),"d" = round(table$summary.table$d,digits=3),"UCL" = table$summary.table$`UCL (95%)`,"pval" = adjusted_p))
+pairwise_groups_plotting$d <- as.numeric(pairwise_groups_plotting$d)
+pairwise_groups_plotting$UCL <- as.numeric(pairwise_groups_plotting$UCL)
+pairwise_groups_plotting$pval <- as.numeric(pairwise_groups_plotting$pval)
+
+ggplot(data=pairwise_groups_plotting,aes(x=Contrasts,y=d,fill=Contrasts)) + geom_bar(stat="identity") +
+  xlab("Contrasts") + ylab("Estimate of differences in Procrustes Distance") + ylim(0,0.06) + 
+  geom_errorbar(aes(ymax=UCL,ymin=UCL)) + geom_text(label=c("*","***","***"))
 ```
 
+```{r echo=FALSE, out.width="75%"}
+knitr::include_graphics("images/pairwise_comp.jpg")
+```
 
-First, I will load in the datasets and do exploratory analyses.
+They also did pairwise comparisons within groups by looking at the dispersion of residuals around the mean shape for each population and using that to group shape variance. I am not going to do that for now. Honestly, I am not really able to do the other modelling that they do because they use a GLS estimator which requires me to include some sort of covariance matrix and I don't know where I generate one of those in the analysis pipeline and from what it is generated. Very frustrating.
 
-Let's start with the linear measurements for all the specimens. Below, I load in the data as a tibble and show a few lines of raw code.
+So I am going to move on to looking at the linear measurements for all the specimen. Below, I load in the data as a tibble and show a few lines of raw code.
 
 ```{r}
 library(tidyverse)
 library(dplyr)
 library(cowplot)
-f <- "https://raw.githubusercontent.com/samksmith/data-analysis-replication/main/data/fox_linear_volume_data.csv"
+f <- "data/fox_linear_volume_data.csv"
 linear_data <- read_csv(f,col_names = TRUE)
 head(linear_data) # what does the raw data look like?
 ```
 
-There are 9 measurements taken for each skull. We can start by doing some descriptive statistics to get a sense of the central tendency and spread of these linear measurements.
+There are 9 measurements taken for each skull. Next I will show some descriptive statistics to get a sense of the central tendency and spread of these linear measurements.
 
-First, let's look at the mean and standard deviations of all the measurements and visualize the central tendency and spread of these linear measurements for each population and sex using boxplots.
 ```{r}
 summary(linear_data[,-c(1:3)]) # show me summary stats for all the skull measurements
 
@@ -154,7 +205,6 @@ p8 <- ggplot(linear_data,aes(x=population,y=face_geometric_mean,fill=factor(sex)
 p9 <- ggplot(linear_data,aes(x=population,y=centroid_size,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Centroid size") + geom_point(position=position_jitterdodge(),alpha=0.3)
 
 plot_grid(p1,p2,p3,p4,p5,p6,p7,p8,p9)
-
 ```
 Looks like there are sex differences and possible group differences most strongly between the wild population and the other two pops, which seem pretty similar by eye. 
 
@@ -165,11 +215,16 @@ cor = cor(linear_data[4:10], use="pairwise.complete.obs")
 corrplot.mixed(cor, lower.col = "black",tl.pos='d',number.cex = .7,upper="ellipse")
 detach(package:corrplot)
 ```
-All of these variables are correlated, which is unsurprising since they represent difference, non-independent aspect of shape variation measured on the same specimens. This plot looks very similar to what is present in the supplemental figures of the paper.
 
-Before doing modeling these data, the authors size-adjusted the linear and volume measurements because there is an overall difference in isometric size between wild and farmed populations. This was important to do because the authors are interested in effect of docility selection on craniofacial size separate from overall size selection, which is expected to also have an impact on craniofacial size.
+```{r echo=FALSE, out.width="75%"}
+knitr::include_graphics("images/correlation_raw.jpg")
+```
 
-Here I will attempt to normalize the 6 linear measurements and cube root of endocranial volume by centroid size (a proxy for overall cranial size). Below, I create a dataframe with the normalized measurements and I slook at the correlation between variables.
+All of these variables are correlated, which is unsurprising since they represent non-independent aspects of shape variation measured on the same specimens. This plot looks very similar to what is present in the supplemental figures of the paper.
+
+Before doing modeling on these data, the authors size-adjusted the linear and volume measurements because there is an overall difference in isometric size between wild and farmed populations. This was important to do because the authors are interested in effect of docility selection on craniofacial size separate from overall size selection, which is expected to also have an impact on craniofacial size.
+
+Here I wil normalize the 6 linear measurements and cube root of endocranial volume by centroid size (a proxy for overall cranial size). Below, I create a dataframe with the normalized measurements and I look at the correlation between variables.
 ```{r}
 
 normal_linear <- tibble("id"=linear_data$id,
@@ -201,7 +256,11 @@ corrplot.mixed(cor, lower.col = "black",tl.pos='d',number.cex = .7,upper="ellips
 detach(package:corrplot)
 ```
 
-My correlation plot looks a lot like the one in the supplementals. INSERT HERE.
+```{r echo=FALSE, out.width="75%"}
+knitr::include_graphics("images/correlation_corrected.jpg")
+```
+
+My correlation plot looks a lot like the one in the supplementals.
 
 
 The authors then used the normalized data to find whether there were population differences. They used a linear model with a generalized least squares (GLS) estimator from nlme package. They regressed all 7 skull variables simultaneously as correlated responses on population identity and sex. They provide more information in the supplementary methods (Figs S3, S4). 
@@ -210,6 +269,28 @@ Because the 7 variable are correlated, it is not appropriate to do separate GLMs
 
 
 ```{r}
+library(nlme)
 ```
 
 We report estimates of pairwise percent differences between population means for each skull variable. We use this method because the 7 linear and volumetric skull variables were correlated in two ways (see Fig. S3). First, they were measured on the same specimens, and second, they represent non-independent aspects of shape variation. Modeling these response variables in 7 separate general linear models (e.g., ANOVA) would result in biologically unrealistic inferences because these correlations would be artificially fixed at zero. In addition, since skull variables exhibited varying amounts of dispersion, the GLS model allowed for different residual variances for each response variable.
+
+STUFF HERE. 
+
+Finally, we can plot the differences among populations in centroid size, and 3 normalized linear skull measurements.
+
+```{r}
+# making box plots to match figure 3
+new_df <- as.data.frame(cbind("Pop" = landmark$labels[,2],"Sex" = landmark$labels[,1],"Centroid" = Pro_sup$Csize))
+new_df$Centroid <- as.numeric(new_df$Centroid)
+p1 <- ggplot(new_df,aes(x=Pop,y=Centroid,col=Sex)) + geom_boxplot() + geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + ylab("Centroid Size")
+p2 <- ggplot(normal_linear,aes(x=population,y=cranial_vault_width_norm,col=sex)) + geom_boxplot() + geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + ylab("Normalized Cranial Vault Width")
+p3 <- ggplot(normal_linear,aes(x=population,y=snout_length_norm,col=sex)) + geom_boxplot() + geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + ylab("Normalized Snout Length")
+p4 <- ggplot(normal_linear,aes(x=population,y=cube_endocranial_volume_norm,col=sex)) + geom_boxplot() + geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + ylab("Normalized Endocranial Volume")
+plot_grid(p1,p2,p3,p4)
+```
+
+```{r echo=FALSE, out.width="75%"}
+knitr::include_graphics("images/boxplots.jpg")
+```
+
+These plots look like the ones in the paper except that I have not yet run the models to give me the significance.
