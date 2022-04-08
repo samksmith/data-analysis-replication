@@ -106,7 +106,23 @@ They look similar, which is good.
 Okay, so now, I can run the permutation-based Procrustes MANOVA to regress tangent space coordinate on population identity and sex. Because of the above results they only control for isometric size. This will also be the case for the linear measurement MANOVA. 
 
 ```{r}
+proc_man_3d_data <- procD.lm(tang_space_coords$x ~ landmark$labels[,1] + landmark$labels[,2],iter=10000,SS.type="II")
+proc_man_3d_data$aov.table
+p.adjust(proc_man_3d_data$aov.table$`Pr(>F)`,method="bonferroni")
 ```
+
+My anova table looks very similar to the one that they report except that my standard deviation of the F statistic is different. I am not sure why. I have had to basically play around with the inputs for the linear model call to make the values match up as much as possible. I am not 100% sure if this is because I don't understand something explained in the paper (such as what inputs should be included in this line of code if you are using GLS rather than OLS) or if they were just not specific enough for me to know right off the bat what I was supposed to do. At a minimum, I get the same p values and regression coefficients so I guess that is good.
+
+That result tells us that population id and sex are predictors of craniofacial shape, but we want to know exactly how. So now I must do pairwise comparisons of shape using Procrustes distances. The authors used the RRPP v. 0.6.1 package for this.
+
+```{r}
+```
+
+Thgey also did pairwise comparisons within groups by looking at the dispersion of residuals around the mean shape for each population and using that to group shape variance. 
+
+```{r}
+```
+
 
 First, I will load in the datasets and do exploratory analyses.
 
