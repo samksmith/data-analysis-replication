@@ -4,6 +4,9 @@ author: "Sam Smith"
 date: "3/2/2022"
 output: html_document
 ---
+
+## Introduction
+
 For this reproducibility project, I will be attempting to replicate the analyses of the following paper:
 
 Kistner, T. M., Zink, K. D., Worthington, S., & Lieberman, D. E. (2021). Geometric morphometric investigation of craniofacial morphological change in domesticated silver foxes. Scientific reports, 11(1), 1-10.
@@ -16,11 +19,15 @@ The data files have the following naming conventions:
 
 linear measurements for all specimens : Fox_linear_volume_data.csv
 
-Replication data measurements for 3D landmark coordinates: DF_morphologika.txt, DF476_morphologika.txt, DM_morphologika.txt, DM23_morphologika.txt, UF_morphologika.txt, UF1058_morphologika.txt
+Replication data measurements for 3D landmark coordinates: DF_morphologika.txt, DF476_morphologika.txt, 
+
+DM_morphologika.txt, DM23_morphologika.txt, UF_morphologika.txt, UF1058_morphologika.txt
 
 Replication data measurements for linear measurements: linear_cv_data.csv
 
-I will be replicating analysis of the 3D landmark and linear measurement data, but not the replication analyses.
+For the 3D coordinate data, I replicated the geometric morphometrics analyses (translation,scaling,orthogonal projection), tested for allometry among populations, replicated the permutation-based Procrustes MANOVA, did pairwise comparisons of shape among populations, and plotted a PCA. For the linear data, I size-adjusted measurements and attempted to regress skull measurements against population id and sex. I did not replicate the sex dimorphism nor repeatability analyses.
+
+## Data Analysis Replication
 
 I will start with the 3D landmark data analysis. Here, I read in 3D landmark coordinate data and look at it. We use the geomorph package because it is a special file type (Morphologika). This was something that I had to google before I understood the file structure.
 
@@ -30,7 +37,7 @@ library(geomorph)
 f <- "data/Fox_data_Morphologika.txt"
 landmark <- read.morphologika(f)
 str(landmark)
-landmark$coords[,,1]
+head(landmark$coords[,,1]) # some of the coordinate data
 
 (n <- length(landmark$labels[,1])) # number of individuals we have 3D landmark data for
 (p <- nrow(landmark$coords[,,1])) # number of measured coordinates
@@ -39,7 +46,7 @@ landmark$coords[,,1]
 
 The landmark dataframe returns a list of 3. The first object in the list has the 3 dimensional coordinates for each sample. The second object has the labels for each sample (id, sex, and group). The final object contains the wireframe values.
 
-Next we need to do a generalized Procrustes analysis. This involves translating landmarks to the origin, rescaling to centroid size, and rotating landmarks using a least squares criterion. this places homologous coordinates in close alignment (in same shape space, centered on the mean shape). From reading the geomorph package manual, this is all done using a single function gpagen.The authors mention in the methods that they use default parameters of the gpagen function.
+Next we need to do a generalized Procrustes analysis. This involves translating landmarks to the origin, rescaling to centroid size, and rotating landmarks using a least squares criterion. This places homologous coordinates in close alignment (in same shape space, centered on the mean shape). From reading the geomorph package manual, this is all done using a single function gpagen.The authors mention in the methods that they use default parameters of the gpagen function.
 
 ```{r}
 Pro_sup <- gpagen(landmark$coords)
@@ -47,9 +54,9 @@ names(Pro_sup)
 str(Pro_sup)
 ```
 
-The returned object (Pro_sup) is another list that contains a bunch of different objects. Some of these include an array of coordinates (coords), a vector of centroid sizes for each specimen (Csize), a variance-covariance matrix of Procrustes shape variables (points.VCV), and a Procrustes distance matrix (procD).
+The returned object (Pro_sup) is another list that contains a bunch of different objects. Some of these include an array of coordinates (coords), a vector of centroid sizes for each specimen (Csize), and a Procrustes distance matrix (procD).
 
-Next, I need to project these coordinates onto a "linear tangent space." Looks like this is plotting coordinates on principal component axes. From some googling, it looks like there was a function directly for this in early versions of the geomorph package, but it is now depreciated (from v. 3.3.0 on) and they suggest gm.prcomp instead. This function defaults to using an OLS for centering, which I think the authors used (instead of GLS), but I am not 100% sure because they aren't specific in the manuscript. I also print out a summary and plot the amount of variance explained by each PC.
+Next, I need to project these coordinates onto a "linear tangent space." Looks like this is plotting coordinates on principal component axes. This allows the variance along different axes to be independent from one another (based on what I know of PCA). From some googling, it looks like I need to use gm.prcomp. This function defaults to using an OLS for centering, which I think the authors used (instead of GLS), but I am not 100% sure because they aren't specific in the manuscript. I also print out a summary and plot the amount of variance explained by each PC.
 
 ```{r}
 library(ggplot2)
@@ -83,7 +90,7 @@ grp.unselected <- PCA_dataframe[PCA_dataframe$Pop == "Unselected", ][chull(PCA_d
 hull.data <- rbind(grp.tame, grp.wild, grp.unselected)
 
 ggplot() + 
-  geom_polygon(data=hull.data,aes(x=Comp1,y=Comp2,group=Pop),alpha=0.30) + # add the convex hulls
+  geom_polygon(data=hull.data,aes(x=Comp1,y=Comp2,group=Pop),alpha=0.30) + # add the hulls
   geom_point(data=PCA_dataframe,aes(x=Comp1,y=Comp2,shape=Sex,colour=Pop)) + # add the point markers
   scale_colour_manual(values=c("Tame" = "green", "Wild" = "purple","Unselected" = "orange")) +
   xlab("PC1 (31.9%)") + ylab("PC2 (8.2%)") + coord_equal() +
@@ -98,13 +105,14 @@ ggplot() +
 knitr::include_graphics("images/PCA.jpg")
 ```
 
- Above I plot the first two PCs to compare with the figure in the paper and they match! I did not attempt to plot the wireframes, but that could be done by accessing the "shape" object within the tangent space coordinates list.
+ Above I plot the first two PCs to compare with the figure in the paper and they match!
 
-Now, I am ready to test hypotheses about shape differences among the three fox populations. The authors used a permutation-based Procrustes MANOVA to regress tangent space coordinates, which I generated above, on population id and sex. They use the geomorph package to do this. They first decided whether they needed to correct for scaling effects, which I do not fully understand. To test this they looked for differences in allometry (i.e. characterstics changing with body size) among populations by using a permutation-based Procrustes MANOVA of tangent space coordinates on the interaction term of population id and centroid size. 
+Now, I am ready to test hypotheses about shape differences among the three fox populations. The authors used a permutation-based Procrustes MANOVA to regress tangent space coordinates, which I generated above, on population id and sex. They use the geomorph package to do this. They first decided whether they needed to correct for scaling effects. To test this they looked for differences in allometry (i.e. characteristics changing with body size) among populations by using a permutation-based Procrustes MANOVA of tangent space coordinates on the interaction term of population id and centroid size. 
 
 Looks like I need to use geomorph::procD.lm, which runs the linear model. From looking at another geomorph function, I get definitions for common and unique allometry models (which show up in Fig S2, so they must have run both).
 
 common allometry: shape ~ size + groups
+
 unique allometry: shape ~ size * groups
 
 ```{r}
@@ -116,10 +124,9 @@ comm_allom$aov.table
 unique_allom$aov.table
 ```
 
-When you look at the anova table you can see that the interaction of centroid size and population ID is not significant, which matches what they find.
+When you look at the anova table you can see that the interaction of centroid size and population ID is not significant, which matches what they report in the paper. This means we don't have to account for allometry in the model we will run below.
 
-
-To replicate figure S2, I have to use different criterion to display shape scores (PredLine - based on fitted values and RegScore - based on regression coefficients). These are plotted below and compared with the figure from the supplementals. 
+Before I move on, I wanted to try and replicate figure S2, which shows the relationship between the fitted values from the model (shape scores) and centroid size (approximation of size). I have to use different criterion to display shape scores (PredLine - based on fitted values and RegScore - based on regression coefficients). These are plotted below and compared with the figure from the supplementals.
 ```{r}
 
 par(mfrow=c(2,2))
@@ -142,7 +149,7 @@ knitr::include_graphics("images/allometry.jpg")
 
 They look similar, which is good. 
 
-Okay, so now, I can run the permutation-based Procrustes MANOVA to regress tangent space coordinate on population identity and sex. Because of the above results they only control for isometric size (aka do nothing). This will also be the case for the linear measurement MANOVA. 
+Okay, so now, I can run the permutation-based Procrustes MANOVA to regress tangent space coordinates on population identity and sex without accounting for scaling effect. 
 
 ```{r}
 proc_man_3d_data <- procD.lm(tang_space_coords$x ~ landmark$labels[,1] + landmark$labels[,2],iter=10000,SS.type="II")
@@ -154,7 +161,7 @@ p.adjust(proc_man_3d_data$aov.table$`Pr(>F)`,method="bonferroni")
 knitr::include_graphics("images/3d_manova.jpg")
 ```
 
-My anova table looks very similar to the one that they report except that the standard deviation of the F statistic is different. I am not sure why. I have had to basically play around with the inputs for the linear model call to make the values match up as much as possible. I am not 100% sure if this is because I don't understand something explained in the paper (such as what inputs should be included in this line of code if you are using GLS rather than OLS) or if they were just not specific enough for me to know right off the bat what I was supposed to do. At a minimum, I get the same regression coefficients so I guess that is good.
+My anova table looks very similar to the one that they report except that the standard deviation of the F statistic is different. I have had to play around with the inputs for the linear model call to make the values match up as much as possible. I am not 100% sure if this is because I don't understand something explained in the paper (such as what inputs should be included in this line of code if you are using GLS rather than OLS) or if they were just not specific enough for me to know right off the bat what I was supposed to do. At a minimum, I get the same regression coefficients so I feel pretty good about that.
 
 That result tells us that population id and sex are predictors of craniofacial shape, but we want to know exactly how. So now I must do pairwise comparisons of shape using Procrustes distances. The authors used the RRPP v. 0.6.1 package for this. I also correct the p value using Bonferroni correction as stated in the methods.
 
@@ -176,9 +183,9 @@ ggplot(data=pairwise_groups_plotting,aes(x=Contrasts,y=d,fill=Contrasts)) + geom
 knitr::include_graphics("images/pairwise_comp.jpg")
 ```
 
-They also did pairwise comparisons within groups by looking at the dispersion of residuals around the mean shape for each population and using that to group shape variance. I am not going to do that for now. Honestly, I am not really able to do the other modelling that they do because they use a GLS estimator which requires me to include some sort of covariance matrix and I don't know where I generate one of those in the analysis pipeline and from what it is generated. Very frustrating.
+These look the same! Which makes sense since my model coefficients were the same as theirs. The authors continue to do some other modelling, but I am not sure how to move on from here. They use a GLS estimator for their linear modeling because the coordinate data is correlated -- so I basically need to include a covariance matrix and I don't know where I generated one of those. So I am stopping here with the analysis of the 3d data. 
 
-So I am going to move on to looking at the linear measurements for all the specimen. Below, I load in the data as a tibble and show a few lines of raw code.
+Now, I am going to move on to looking at the linear measurements for all the specimen. Below, I load in the data as a tibble and show a few lines of raw code.
 
 ```{r}
 library(tidyverse)
@@ -186,7 +193,7 @@ library(dplyr)
 library(cowplot)
 f <- "data/fox_linear_volume_data.csv"
 linear_data <- read_csv(f,col_names = TRUE)
-head(linear_data) # what does the raw data look like?
+head(linear_data)
 ```
 
 There are 9 measurements taken for each skull. Next I will show some descriptive statistics to get a sense of the central tendency and spread of these linear measurements.
@@ -194,26 +201,44 @@ There are 9 measurements taken for each skull. Next I will show some descriptive
 ```{r}
 summary(linear_data[,-c(1:3)]) # show me summary stats for all the skull measurements
 
-p1 <- ggplot(linear_data,aes(x=population,y=zygomatic_width,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Zygomatic width") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p2 <- ggplot(linear_data,aes(x=population,y=cranial_vault_width,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Cranial vault width") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p3 <- ggplot(linear_data,aes(x=population,y=upper_jaw_width,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Upper jaw width") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p4 <- ggplot(linear_data,aes(x=population,y=total_skull_length,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Total skull length") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p5 <- ggplot(linear_data,aes(x=population,y=snout_length,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Snout length") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p6 <- ggplot(linear_data,aes(x=population,y=cranial_vault_height,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Cranial vault height") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p7 <- ggplot(linear_data,aes(x=population,y=endocranial_volume,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Endocranial volume") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p8 <- ggplot(linear_data,aes(x=population,y=face_geometric_mean,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Face geometric mean") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p9 <- ggplot(linear_data,aes(x=population,y=centroid_size,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Centroid size") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p1 <- ggplot(linear_data,aes(x=population,y=zygomatic_width,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("Zygomatic width") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))
+p2 <- ggplot(linear_data,aes(x=population,y=cranial_vault_width,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("Cranial vault width") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))
+p3 <- ggplot(linear_data,aes(x=population,y=upper_jaw_width,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + 
+  ylab("Upper jaw width") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))
+p4 <- ggplot(linear_data,aes(x=population,y=total_skull_length,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("Total skull length") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))
+p5 <- ggplot(linear_data,aes(x=population,y=snout_length,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + 
+  ylab("Snout length") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))
+p6 <- ggplot(linear_data,aes(x=population,y=cranial_vault_height,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("Cranial vault height") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))
+p7 <- ggplot(linear_data,aes(x=population,y=endocranial_volume,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("Endocranial volume") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))
+p8 <- ggplot(linear_data,aes(x=population,y=face_geometric_mean,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("Face geometric mean") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))
+p9 <- ggplot(linear_data,aes(x=population,y=centroid_size,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + 
+  ylab("Centroid size") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))
 
 plot_grid(p1,p2,p3,p4,p5,p6,p7,p8,p9)
 ```
+
 Looks like there are sex differences and possible group differences most strongly between the wild population and the other two pops, which seem pretty similar by eye. 
 
-Let's also look to see if there are relationships between these measurements or whether these measurements are independent of each other. It is important to look at this because it will inform the linear modeling later on. 
+Let's also look to see if there are relationships between these measurements or whether these measurements are independent of each other. It is important to look at this because it will inform the linear modeling later on.
 ```{r}
 library(corrplot)
 cor = cor(linear_data[4:10], use="pairwise.complete.obs")
 corrplot.mixed(cor, lower.col = "black",tl.pos='d',number.cex = .7,upper="ellipse")
-detach(package:corrplot)
 ```
 
 ```{r echo=FALSE, out.width="75%"}
@@ -224,7 +249,7 @@ All of these variables are correlated, which is unsurprising since they represen
 
 Before doing modeling on these data, the authors size-adjusted the linear and volume measurements because there is an overall difference in isometric size between wild and farmed populations. This was important to do because the authors are interested in effect of docility selection on craniofacial size separate from overall size selection, which is expected to also have an impact on craniofacial size.
 
-Here I wil normalize the 6 linear measurements and cube root of endocranial volume by centroid size (a proxy for overall cranial size). Below, I create a dataframe with the normalized measurements and I look at the correlation between variables.
+Here I will normalize the 6 linear measurements and cube root of endocranial volume by centroid size (a proxy for overall cranial size). Below, I create a dataframe with the normalized measurements and I look at the correlation between variables.
 ```{r}
 
 normal_linear <- tibble("id"=linear_data$id,
@@ -236,21 +261,35 @@ normal_linear <- tibble("id"=linear_data$id,
                         "total_skull_length_norm" = linear_data$total_skull_length / linear_data$centroid_size,
                         "snout_length_norm" = linear_data$snout_length / linear_data$centroid_size,
                         "cranial_vault_height_norm" = linear_data$cranial_vault_height / linear_data$centroid_size,
-                        "cube_endocranial_volume_norm" = (linear_data$endocranial_volume)^(1/3) / linear_data$centroid_size)
-head(normal_linear)
+                        "cube_endocranial_volume_norm" = 
+                          (linear_data$endocranial_volume)^(1/3) / linear_data$centroid_size)
+
 summary(normal_linear[,-c(1:3)]) 
 
-p1 <- ggplot(normal_linear,aes(x=population,y=zygomatic_width_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized zygomatic width") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p2 <- ggplot(normal_linear,aes(x=population,y=cranial_vault_width_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized cranial vault width") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p3 <- ggplot(normal_linear,aes(x=population,y=upper_jaw_width_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized upper jaw width") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p4 <- ggplot(normal_linear,aes(x=population,y=total_skull_length_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized total skull length") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p5 <- ggplot(normal_linear,aes(x=population,y=snout_length_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized snout length") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p6 <- ggplot(normal_linear,aes(x=population,y=cranial_vault_height_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized cranial vault height") + geom_point(position=position_jitterdodge(),alpha=0.3)
-p7 <- ggplot(normal_linear,aes(x=population,y=cube_endocranial_volume_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) + ylab("Normalized, cubed endocranial volume") + geom_point(position=position_jitterdodge(),alpha=0.3)
+p1 <- ggplot(normal_linear,aes(x=population,y=zygomatic_width_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("norm zygo width") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))  
+p2 <- ggplot(normal_linear,aes(x=population,y=cranial_vault_width_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("norm cv width") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))  
+p3 <- ggplot(normal_linear,aes(x=population,y=upper_jaw_width_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("norm upper jaw width") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))  
+p4 <- ggplot(normal_linear,aes(x=population,y=total_skull_length_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("norm skull length") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))  
+p5 <- ggplot(normal_linear,aes(x=population,y=snout_length_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("norm snout length") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))  
+p6 <- ggplot(normal_linear,aes(x=population,y=cranial_vault_height_norm,fill=factor(sex))) + geom_boxplot(na.rm=TRUE) +
+  ylab("norm cv height") + geom_point(position=position_jitterdodge(),alpha=0.3) + 
+  theme(text = element_text(size = 10))  
+p7 <- ggplot(normal_linear,aes(x=population,y=cube_endocranial_volume_norm,fill=factor(sex))) +
+  geom_boxplot(na.rm=TRUE) + ylab("norm endocranial vol^3") + geom_point(position=position_jitterdodge(),alpha=0.3) +
+  theme(text = element_text(size = 10))  
 
 plot_grid(p1,p2,p3,p4,p5,p6,p7)
 
-library(corrplot)
 cor = cor(normal_linear[4:10], use="pairwise.complete.obs")
 corrplot.mixed(cor, lower.col = "black",tl.pos='d',number.cex = .7,upper="ellipse")
 detach(package:corrplot)
@@ -263,20 +302,26 @@ knitr::include_graphics("images/correlation_corrected.jpg")
 My correlation plot looks a lot like the one in the supplementals.
 
 
-The authors then used the normalized data to find whether there were population differences. They used a linear model with a generalized least squares (GLS) estimator from nlme package. They regressed all 7 skull variables simultaneously as correlated responses on population identity and sex. They provide more information in the supplementary methods (Figs S3, S4). 
-
-Because the 7 variable are correlated, it is not appropriate to do separate GLMs for each variable on population identity and sex. The GLS estimator allows correlations between the variables to be accounted for within the model.
+The authors then used the normalized data to find whether there were population differences. They used a linear model with a generalized least squares (GLS) estimator from nlme package. They regressed all 7 skull variables simultaneously as correlated responses on population identity and sex. They provide more information in the supplementary methods (Figs S3, S4). We have to include information about how the response variables are correlated in the gls call. Typically this is done iteratively, where you run a model and look at the BIC (bayesian information criterion) value to assess how well the model fits. According to google, a lower BIC is better. Below, I was only able to run a model where I assumed no covariance because when I tried to include the necessary "correlation" and "weights" options in the model call, the code would not run. I did a lot of googling and looking for examples, but I was unable to find a solution to my error. This may be partially because I was unable to find an example where someone used nlme::gls to model multiple response variables. So I have left it at what I was able to do below. I commented out the code that didn't run so it is visible, but doesn't impact knitting.
 
 
 ```{r}
 library(nlme)
+# response variables as a matrix
+Y <- as.matrix(normal_linear[,4:10])
+# start with no specification of covariance -- assuming no covariance of response variables
+linear_mod1 <- gls(model = Y ~ as.factor(population) + as.factor(sex),data=normal_linear,method="REML") # BIC 22.49991
+
+# try specifying covariance - assuming linear spatial correlation (corLin) - these lines of code do not run
+# linear_mod2 <- gls(model = Y ~ as.factor(population) + as.factor(sex),data=normal_linear,method="REML",
+                   # correlation=corLin(form = ~ zygomatic_width_norm + cranial_vault_width_norm + 
+                                       # upper_jaw_width_norm + total_skull_length_norm + snout_length_norm + 
+                                      #  cranial_vault_height_norm + cube_endocranial_volume_norm | id))
 ```
 
-We report estimates of pairwise percent differences between population means for each skull variable. We use this method because the 7 linear and volumetric skull variables were correlated in two ways (see Fig. S3). First, they were measured on the same specimens, and second, they represent non-independent aspects of shape variation. Modeling these response variables in 7 separate general linear models (e.g., ANOVA) would result in biologically unrealistic inferences because these correlations would be artificially fixed at zero. In addition, since skull variables exhibited varying amounts of dispersion, the GLS model allowed for different residual variances for each response variable.
+Because I was unable to run the gls successfully I have not moved forward with estimating the pairwise percent differences between population means for each skull variable. I expect that if I did so, I would find inflated relationships since I am not taking into account the correlation between response measures. 
 
-STUFF HERE. 
-
-Finally, we can plot the differences among populations in centroid size, and 3 normalized linear skull measurements.
+Although I was not able to mimic the modeling completely, I can still plot the differences among populations in centroid size and 3 of the normalized linear skull measurements. I have not included significance in my plot below, since I was unable to generate the appropriate model which would have provided those p-values. However, you can see I was able to replicate the plots themselves pretty well.
 
 ```{r}
 # making box plots to match figure 3
@@ -293,4 +338,8 @@ plot_grid(p1,p2,p3,p4)
 knitr::include_graphics("images/boxplots.jpg")
 ```
 
-These plots look like the ones in the paper except that I have not yet run the models to give me the significance.
+## Discussion
+
+I feel that I was relatively successful in replicating the results of these studies, although I was not able to replicate every analysis. In general, I found the methods easy to follow, and the authors provided all of the data. My biggest issue was fitting the models using generalized least squares (GLS). This requires having information about how the data covary. For the 3D data, I was not sure how to generate the variance-covariance matrix, and for the linear data, I was unable to run the gls function appropriately. Although the authors provided a lot of information on how they specified their model, they did not explain how to translate that into running the gls function in r. This is partially my ignorance, as a person who is unfamiliar with this type of linear regression, but I spent a lot of time trying to troubleshoot the code and read about these methods on the internet, and was still unable to figure it out. So more detail on the modelling would have been helpful. For the pieces that I was able to successfully run, my results match with the results from the paper, including all visualizations, which is gratifying. Although I was unable to replicate much of the modeling, I find the same patterns in the data that the authors report. The minor differences between the results I generate and that of the published work is due to my being unable to incorporate the covariance data into the modelling. For example, in the 3d data analysis, I basically end up using an OLS estimator instead of a GLS. The results differ in the standard deviation of the F statistic and the p values which makes sense if I am using a different estimator and if unaccounted-for correlation inflates the relationship between the variables.
+
+Overall, I think that the authors have published a highly replicable study because alongside the paper itself, supplemental materials, and data, the authors provide all the code that they used analyze the data and generate the visualizations. As requested, I did not look at these R scripts, but I imagine, that combining those scripts with the detail found in the paper and supplementals, would allow others to completely replicate this study.
