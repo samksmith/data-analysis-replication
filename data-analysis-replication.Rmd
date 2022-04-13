@@ -311,7 +311,7 @@ library(nlme)
 Y <- as.matrix(normal_linear[,4:10])
 # start with no specification of covariance -- assuming no covariance of response variables
 linear_mod1 <- gls(model = Y ~ as.factor(population) + as.factor(sex),data=normal_linear,method="REML") # BIC 22.49991
-
+summary(linear_mod1)
 # try specifying covariance - assuming linear spatial correlation (corLin) - these lines of code do not run
 # linear_mod2 <- gls(model = Y ~ as.factor(population) + as.factor(sex),data=normal_linear,method="REML",
                    # correlation=corLin(form = ~ zygomatic_width_norm + cranial_vault_width_norm + 
@@ -319,7 +319,7 @@ linear_mod1 <- gls(model = Y ~ as.factor(population) + as.factor(sex),data=norma
                                       #  cranial_vault_height_norm + cube_endocranial_volume_norm | id))
 ```
 
-Because I was unable to run the gls successfully I have not moved forward with estimating the pairwise percent differences between population means for each skull variable. I expect that if I did so, I would find inflated relationships since I am not taking into account the correlation between response measures. 
+Because I was unable to run the gls successfully I have not moved forward with estimating the pairwise percent differences between population means for each skull variable.
 
 Although I was not able to mimic the modeling completely, I can still plot the differences among populations in centroid size and 3 of the normalized linear skull measurements. I have not included significance in my plot below, since I was unable to generate the appropriate model which would have provided those p-values. However, you can see I was able to replicate the plots themselves pretty well.
 
@@ -327,10 +327,17 @@ Although I was not able to mimic the modeling completely, I can still plot the d
 # making box plots to match figure 3
 new_df <- as.data.frame(cbind("Pop" = landmark$labels[,2],"Sex" = landmark$labels[,1],"Centroid" = Pro_sup$Csize))
 new_df$Centroid <- as.numeric(new_df$Centroid)
-p1 <- ggplot(new_df,aes(x=Pop,y=Centroid,col=Sex)) + geom_boxplot() + geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + ylab("Centroid Size")
-p2 <- ggplot(normal_linear,aes(x=population,y=cranial_vault_width_norm,col=sex)) + geom_boxplot() + geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + ylab("Normalized Cranial Vault Width")
-p3 <- ggplot(normal_linear,aes(x=population,y=snout_length_norm,col=sex)) + geom_boxplot() + geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + ylab("Normalized Snout Length")
-p4 <- ggplot(normal_linear,aes(x=population,y=cube_endocranial_volume_norm,col=sex)) + geom_boxplot() + geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + ylab("Normalized Endocranial Volume")
+
+p1 <- ggplot(new_df,aes(x=Pop,y=Centroid,col=Sex)) + geom_boxplot() +
+  geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + ylab("Centroid Size")
+p2 <- ggplot(normal_linear,aes(x=population,y=cranial_vault_width_norm,col=sex)) + geom_boxplot() +
+  geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + 
+  ylab("Normalized Cranial Vault Width")
+p3 <- ggplot(normal_linear,aes(x=population,y=snout_length_norm,col=sex)) + geom_boxplot() +
+  geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + ylab("Normalized Snout Length")
+p4 <- ggplot(normal_linear,aes(x=population,y=cube_endocranial_volume_norm,col=sex)) + geom_boxplot() +
+  geom_point(position=position_jitterdodge(jitter.width=0.15)) + xlab("Population") + 
+  ylab("Normalized Endocranial Volume")
 plot_grid(p1,p2,p3,p4)
 ```
 
